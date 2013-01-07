@@ -1,5 +1,4 @@
-module namespace util = 'http://lc2j.tp.net/util';
-
+module namespace util = "http://lc2j.tp.net/util";
 
 declare function util:index-of($elements as element()*, $element as element()) as xs:integer {
     let $positions as xs:integer* := 
@@ -20,4 +19,5 @@ declare function util:index-of-match-first
   if (matches($arg,$pattern))
   then string-length(tokenize($arg, $pattern)[1]) + 1
   else ()
-};
+ } ;
+
