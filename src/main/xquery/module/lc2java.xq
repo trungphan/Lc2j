@@ -175,7 +175,7 @@ declare function lc2j:render-process($process as element(), $package as xs:strin
     "",
     lc2ju:make-javadoc(0, $process/sup:description[text()]/data(.)),
     '@SuppressWarnings({"rawtypes", "unchecked", "unused"})',
-    concat('@LongLivedProcess(name = "', $process/@name, '", type = "', $process/@type, '", transactionPropagation = "', $process/@transaction-propagation, '", transactionTimeout = ', $process/@transaction-timeout, ')'),
+    concat( if ($process/@type = "asynchronous") then '@LongLivedProcess' else '@ShortLivedProcess', '(name = "', $process/@name, '", type = "', $process/@type, '", transactionPropagation = "', $process/@transaction-propagation, '", transactionTimeout = ', $process/@transaction-timeout, ')'),
     if ($process/@deprecated = "true") then "@Deprecated" else (),
     concat("public class ", $classname, " extends BaseAction {"),
     lc2j:render-variables(1, $process),
