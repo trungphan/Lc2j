@@ -1,0 +1,181 @@
+<project name="lc2j" basedir="." default="build">
+
+	<target name="build">
+		<antcall target="main">
+			<param name="dir" value="${basedir}/dropins/process"/>
+			<param name="includes" value="**/*.process"/>
+			<param name="excludes" value=""/>
+			<param name="todir" value="${basedir}/gen/main/java"/>
+		</antcall>
+	</target>
+
+	  <target name="main">
+	    <script language="javascript"> <![CDATA[
+
+	      // import statements
+	      // importPackage(java.io);
+	      importClass(java.io.File);
+
+	      // Access to Ant-Properties by their names
+	      var dir      = project.getProperty("dir");
+	      var includes = project.getProperty("includes");
+	      var excludes = self.getProject().getProperty("excludes");
+	      var todir    = project.getProperty("todir");
+
+	      // Create a <fileset dir="" includes=""/>
+	      fs = project.createDataType("fileset");
+	      fs.setDir( new File(dir) );
+	      fs.setIncludes(includes);
+	      fs.setExcludes(excludes);
+
+	      // Get the files (array) of that fileset
+	      ds = fs.getDirectoryScanner(project);
+	      srcFiles = ds.getIncludedFiles();
+
+	      // iterate over that array
+	      for (i=0; i<srcFiles.length; i++) {
+
+	        // get the values via Java API
+	        var basedir  = fs.getDir(project);
+	        var filename = srcFiles[i];
+	        var file = new File(basedir, filename);
+	        var size = file.length();
+	    	var javafilename = filename.replace('.process', '.java').replace('\\2.6', '').replace('\\1.0', '').replace('\\1.2', '');
+	    	var index = javafilename.lastIndexOf('\\');
+	    	var index2 = javafilename.lastIndexOf('.');
+	    	var packagename = javafilename.substring(0, index).replace('\\', '.');
+	    	var javadir = todir + '/' + packagename.replace('.', '\\');
+	    	var classname = javafilename.substring(index + 1, index2);
+
+	    	var mkdir = project.createTask("mkdir");
+	    	mkdir.setDir(new File(javadir));
+	    	mkdir.perform();
+	    	
+	        // create and use a Task via Ant API
+	        var echo = project.createTask("echo");
+	        echo.setMessage(filename + ": " + javadir);
+	        echo.perform();
+	    	
+	    	var antcall = project.createTask("antcall");
+	    	antcall.setTarget("transform");
+	    	var inputfileParam = antcall.createParam();
+	    	inputfileParam.setName("inputfile");
+	    	inputfileParam.setValue(dir + '/' + filename);
+
+	    	var outputfileParam = antcall.createParam();
+	    	outputfileParam.setName("outputfile");
+	    	outputfileParam.setValue(todir + '/' + javafilename);
+	    	var packageParam = antcall.createParam();
+	    	packageParam.setName("package");
+	    	packageParam.setValue(packagename);
+	    	
+	    	var classnameParam = antcall.createParam();
+	    	classnameParam.setName("classname");
+	    	classnameParam.setValue(classname);
+	    	
+	    	antcall.perform();
+	    	
+	      }
+	    ]]></script>
+	  </target>
+	
+	
+	<target name="transform">
+		<exec
+			executable="C:\Program Files (x86)\Zorba XQuery Processor 2.7.0\bin\zorba.exe"
+			dir="${basedir}/src/main/xquery"
+			>
+			<arg line='--omit-xml-declaration --serialize-text -e package:=${package} -e classname:=${classname} --context-item "${inputfile}" -o "${outputfile}" -f -q lc2j.xq'/>
+		</exec>
+	</target>
+	
+	
+	<target name="buildSvg">
+		<antcall target="toSvgs">
+			<param name="dir" value="${basedir}/dropins/process"/>
+			<param name="includes" value="**/*.process"/>
+			<param name="excludes" value=""/>
+			<param name="todir" value="${basedir}/gen/main/svg"/>
+		</antcall>
+	</target>
+	
+  <target name="toSvgs">
+    <script language="javascript"> <![CDATA[
+
+      // import statements
+      // importPackage(java.io);
+      importClass(java.io.File);
+
+      // Access to Ant-Properties by their names
+      var dir      = project.getProperty("dir");
+      var includes = project.getProperty("includes");
+      var excludes = self.getProject().getProperty("excludes");
+      var todir    = project.getProperty("todir");
+
+      // Create a <fileset dir="" includes=""/>
+      fs = project.createDataType("fileset");
+      fs.setDir( new File(dir) );
+      fs.setIncludes(includes);
+      fs.setExcludes(excludes);
+
+      // Get the files (array) of that fileset
+      ds = fs.getDirectoryScanner(project);
+      srcFiles = ds.getIncludedFiles();
+
+      // iterate over that array
+      for (i=0; i<srcFiles.length; i++) {
+
+        // get the values via Java API
+        var basedir  = fs.getDir(project);
+        var filename = srcFiles[i];
+        var file = new File(basedir, filename);
+        var size = file.length();
+    	var javafilename = filename.replace('.process', '.svg').replace('\\2.6', '').replace('\\1.0', '').replace('\\1.2', '');
+    	var index = javafilename.lastIndexOf('\\');
+    	var index2 = javafilename.lastIndexOf('.');
+    	var packagename = javafilename.substring(0, index).replace('\\', '.');
+    	var javadir = todir + '/' + packagename.replace('.', '\\');
+    	var classname = javafilename.substring(index + 1, index2);
+
+    	var mkdir = project.createTask("mkdir");
+    	mkdir.setDir(new File(javadir));
+    	mkdir.perform();
+    	
+        // create and use a Task via Ant API
+        var echo = project.createTask("echo");
+        echo.setMessage(filename + ": " + javadir);
+        echo.perform();
+    	
+    	var antcall = project.createTask("antcall");
+    	antcall.setTarget("toSvg");
+    	var inputfileParam = antcall.createParam();
+    	inputfileParam.setName("inputfile");
+    	inputfileParam.setValue(dir + '/' + filename);
+
+    	var outputfileParam = antcall.createParam();
+    	outputfileParam.setName("outputfile");
+    	outputfileParam.setValue(todir + '/' + javafilename);
+    	
+    	antcall.perform();
+    	
+      }
+    ]]></script>
+    </target>	
+	
+	<target name="toSvg">
+		<java classname="net.sf.saxon.Query" fork="true" dir="${basedir}">
+			<classpath>
+				<fileset dir="${basedir}" includes="saxon9.jar"/>
+			</classpath>
+			<arg value="-s:${inputfile}"/>
+			<arg value="-o:${outputfile}"/>
+			<arg line="lc2svgmain.xq"/>
+		</java>
+	</target>
+	
+	
+	
+	
+	
+	
+</project>

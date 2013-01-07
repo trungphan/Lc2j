@@ -185,6 +185,12 @@ declare function lc2j:render-process($process as element(), $package as xs:strin
 };
 
 declare function lc2j:render-startpoints($indent as xs:integer, $process as element(), $classname as xs:string) as item()* {
+    lc2j:render-startpoints-default($indent, $process, $classname),
+    lc2j:render-startpoints-workspace($indent, $process, $classname),
+    lc2j:render-startpoints-event($indent, $process, $classname)
+};
+
+declare function lc2j:render-startpoints-default($indent as xs:integer, $process as element(), $classname as xs:string) as item()* {
     "",
     "",
     lc2ju:indent($indent, concat("public static Map invoke(",
@@ -202,30 +208,54 @@ declare function lc2j:render-startpoints($indent as xs:integer, $process as elem
     return lc2ju:indent($indent + 1, concat('result.put("', $variable/@name, '", instance.', $variable/@name, ');')),
     lc2ju:indent($indent + 1, "return result;"),
     lc2ju:indent($indent, "}")
-    ,
-    "",
-    "",
-    lc2ju:indent($indent, "public static void invokeByEvent(BaseEvent event) {"),
-    for $event in $process/sup:start-points/sup:start-event-receive
-    return (
-        lc2ju:indent($indent + 1, 
-            concat('if (',
-                string-join(
-                    (
-                    concat('event.getTypeName() == "', $event/@event-type-name, '"' ),
-                    for $filter in $event/sup:eventFilters/sup:Filter
-                    return concat('event.expr("', $filter/sup:LHSOperand, '") ', lc2ju:operator-to-java-operator($filter/sup:operator), ' x("', $filter/sup:RHSOperand, '")')
-                    )
-                , " &#38;&#38; "),
-                ') {'
-            )),
-        lc2ju:indent($indent + 2, concat(lc2ju:text-to-class-name($classname), " instance = new ", lc2ju:text-to-class-name($classname), "();")),
-        for $callback in $event/sup:callback-datamappings/sup:callback-datamapping
-        return lc2ju:indent($indent + 2, concat('instance.setProcessData("', $callback/sup:processVariableReference, '", event.getData("', $callback/sup:event-data-reference, '"));')),
-        lc2ju:indent($indent + 2, "instance.startWorkflow(1);"),
-        lc2ju:indent($indent + 1, "}")
-    ),
-    lc2ju:indent($indent, "}")
+};
+
+declare function lc2j:render-startpoints-workspace($indent as xs:integer, $process as element(), $classname as xs:string) as item()* {
+    if (empty($process//sup:endpoints/sup:endpoint[@typeName="TaskManager"])) then ()
+    else
+        "",
+        "",
+        lc2ju:indent($indent,"public static void invokeFromWorkspace() {"),
+        "",
+        lc2ju:indent($indent + 1, "Map data = new HashMap();"),
+        let $endpoint := $process//sup:endpoints/sup:endpoint[@typeName="TaskManager"][1],
+        $value as document-node() := parse-xml($endpoint/sup:value/data(.))
+        for $entry in $value/*:map/*:entry
+        let $entry-name := $entry/*:string[1],
+        $entry-value := $entry/*:string[2]
+        return (
+            lc2ju:indent($indent + 1, concat("data.put(", lc2ju:to-string-literal($indent + 1, $entry-name), ", ", lc2ju:to-string-literal($indent + 1, $entry-value), ");"))
+        ),
+        lc2ju:indent($indent,"}")        
+};
+
+declare function lc2j:render-startpoints-event($indent as xs:integer, $process as element(), $classname as xs:string) as item()* {
+    if (empty($process/sup:start-points/sup:start-event-receive)) then ()
+    else (
+        "",
+        "",
+        lc2ju:indent($indent, "public static void invokeByEvent(BaseEvent event) {"),
+        for $event in $process/sup:start-points/sup:start-event-receive
+        return (
+            lc2ju:indent($indent + 1, 
+                concat('if (',
+                    string-join(
+                        (
+                        concat('event.getTypeName() == "', $event/@event-type-name, '"' ),
+                        for $filter in $event/sup:eventFilters/sup:Filter
+                        return concat('event.expr("', $filter/sup:LHSOperand, '") ', lc2ju:operator-to-java-operator($filter/sup:operator), ' x("', $filter/sup:RHSOperand, '")')
+                        )
+                    , " &#38;&#38; "),
+                    ') {'
+                )),
+            lc2ju:indent($indent + 2, concat(lc2ju:text-to-class-name($classname), " instance = new ", lc2ju:text-to-class-name($classname), "();")),
+            for $callback in $event/sup:callback-datamappings/sup:callback-datamapping
+            return lc2ju:indent($indent + 2, concat('instance.setProcessData("', $callback/sup:processVariableReference, '", event.getData("', $callback/sup:event-data-reference, '"));')),
+            lc2ju:indent($indent + 2, "instance.startWorkflow(1);"),
+            lc2ju:indent($indent + 1, "}")
+        ),
+        lc2ju:indent($indent, "}")
+    )    
 };
 
 declare function lc2j:render-variables($indent as xs:integer,$process as element()) as item()* {
@@ -268,47 +298,50 @@ declare function lc2j:render-workflow($indent as xs:integer, $branch as element(
     "",
     "",
     lc2ju:indent($indent, "private void startWorkflow(int step) {"),
-    lc2ju:indent($indent + 1, "switch (step) {"),
-    let $startActionName := $branch/@start-action/data(.)
-    let $start := lcutil:name-to-action($branch, $startActionName)
-    let $actions as element()* := lc2j:traverse-depth-first($start)
-    (: let $actions as element()* := algo:tranverse-depth-first-multiple-starts($branch, $start | $branch/sup:pools/sup:pool/sup:swimlanes/sup:swimlane/sup:events/sup:event-receive | $branch/sup:events/sup:event-receive) :)
-    for $e at $pos in $actions
-        return
-        (
-            "",
-            (: display swimlane :)
-            let $swimlane := $e/ancestor::sup:swimlane
+    if (not(empty($branch/@start-action))) then (
+        lc2ju:indent($indent + 1, "switch (step) {"),
+        let $startActionName := $branch/@start-action/data(.)
+        let $start := lcutil:name-to-action($branch, $startActionName)
+        let $actions as element()* := lc2j:traverse-depth-first($start)
+        (: let $actions as element()* := algo:tranverse-depth-first-multiple-starts($branch, $start | $branch/sup:pools/sup:pool/sup:swimlanes/sup:swimlane/sup:events/sup:event-receive | $branch/sup:events/sup:event-receive) :)
+        for $e at $pos in $actions
             return
-                if ($pos = 1 or $swimlane/@name != $actions[$pos - 1]/ancestor::sup:swimlane/@name)
-                then lc2ju:indent($indent, concat('// L', count($swimlane/preceding-sibling::*) + 1, ' ', $swimlane/@name))
-                else (),
-            (: display in routes :)
-            let $fromActionIndexes :=
-                for $fromAction in $branch/sup:pools/sup:pool/sup:swimlanes/sup:swimlane/(sup:actions | sup:events)/* | $branch/(sup:actions | sup:events)/*
-                where $fromAction/sup:routes/sup:route/@destination = $e/@name
-                return string(util:index-of($actions, $fromAction))
-            return
-                if (empty($fromActionIndexes) or (count($fromActionIndexes) = 1 and xs:integer($fromActionIndexes[1]) = $pos - 1))
-                then ()
-                else lc2ju:indent($indent + 1, concat('// from ', string-join($fromActionIndexes, ', ') ))
-            ,
-            lc2ju:indent($indent + 1, concat("case ", if ($pos < 10) then " " else "", $pos, ": ", lc2ju:text-to-method-name($e/@name/data(.)), "(); //", $e/@service-name | $e/@event-type-name)),
-            typeswitch ($e)
-            case element(sup:split)
-                return (
-                    lc2ju:indent($indent + 2, concat('     new SplitAction("', $e/@name , '") {')),
-                    lc2ju:indent($indent + 3, concat("     public void wait_", $e/@join-type , "() {")),
-                    for $subbranch in $e/sup:branches/sup:branch
-                    return lc2ju:indent($indent + 4, concat("     new ", lc2ju:text-to-class-name($subbranch/@name), '().startWorkflow(1);')),
-                    lc2ju:indent($indent + 3, "     }"),
-                    lc2ju:indent($indent + 2, "     };")
-                    )
-            default return (),
-            lc2j:render-routes($indent+2, $branch, $actions, $e)
-        )
+            (
+                "",
+                (: display swimlane :)
+                let $swimlane := $e/ancestor::sup:swimlane
+                return
+                    if ($pos = 1 or $swimlane/@name != $actions[$pos - 1]/ancestor::sup:swimlane/@name)
+                    then lc2ju:indent($indent, concat('// L', count($swimlane/preceding-sibling::*) + 1, ' ', $swimlane/@name))
+                    else (),
+                (: display in routes :)
+                let $fromActionIndexes :=
+                    for $fromAction in $branch/sup:pools/sup:pool/sup:swimlanes/sup:swimlane/(sup:actions | sup:events)/* | $branch/(sup:actions | sup:events)/*
+                    where $fromAction/sup:routes/sup:route/@destination = $e/@name
+                    return string(util:index-of($actions, $fromAction))
+                return
+                    if (empty($fromActionIndexes) or (count($fromActionIndexes) = 1 and xs:integer($fromActionIndexes[1]) = $pos - 1))
+                    then ()
+                    else lc2ju:indent($indent + 1, concat('// from ', string-join($fromActionIndexes, ', ') ))
+                ,
+                lc2ju:indent($indent + 1, concat("case ", if ($pos < 10) then " " else "", $pos, ": ", lc2ju:text-to-method-name($e/@name/data(.)), "(); //", $e/@service-name | $e/@event-type-name)),
+                typeswitch ($e)
+                case element(sup:split)
+                    return (
+                        lc2ju:indent($indent + 2, concat('     new SplitAction("', $e/@name , '") {')),
+                        lc2ju:indent($indent + 3, concat("     public void wait_", $e/@join-type , "() {")),
+                        for $subbranch in $e/sup:branches/sup:branch
+                        return lc2ju:indent($indent + 4, concat("     new ", lc2ju:text-to-class-name($subbranch/@name), '().startWorkflow(1);')),
+                        lc2ju:indent($indent + 3, "     }"),
+                        lc2ju:indent($indent + 2, "     };")
+                        )
+                default return (),
+                lc2j:render-routes($indent+2, $branch, $actions, $e)
+            ),
+        lc2ju:indent($indent + 1, "}")
+    )
+    else ()
     ,
-    lc2ju:indent($indent + 1, "}"),
     lc2ju:indent($indent, "}")
 };
 
